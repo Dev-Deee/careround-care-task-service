@@ -28,5 +28,11 @@ public class CarePlan {
     private String cadence;
 
     @Column(nullable = false)
+    private int intervalHours;
+
+    @Column(nullable = false)
     private boolean active = true;
+
+    @Column(nullable = false)
+    private UUID createdBy;
 }

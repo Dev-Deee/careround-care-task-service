@@ -15,4 +15,5 @@ public interface CareTaskRepository extends JpaRepository<CareTask, UUID> {
     List<CareTask> findByAssignedNurseIdAndStatus(UUID assignedNurseId, CareTaskStatus status);
     List<CareTask> findByPatientIdAndStatusIn(UUID patientId, List<CareTaskStatus> statuses);
     List<CareTask> findByStatusAndDeadlineBefore(CareTaskStatus status, Instant now);
+    List<CareTask> findByCarePlanIdOrderByDeadlineDesc(UUID carePlanId);
 }
