@@ -23,4 +23,7 @@ public class CareProtocol {
 
     @Column(nullable = false)
     private String cadence;
+
+    @Column(nullable = false)
+    private int intervalHours; // machine-readable — what the generation logic actually reads
 }

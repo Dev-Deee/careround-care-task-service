@@ -85,6 +85,16 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.CONFLICT, "This resource already exists or violates a data constraint");
     }
 
+    @ExceptionHandler(CarePlanNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleCarePlanNotFound(CarePlanNotFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(CareProtocolNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleCareProtocolNotFound(CareProtocolNotFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
     private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String message) {
         return ResponseEntity.status(status).body(Map.of(
                 "status", status.value(),
