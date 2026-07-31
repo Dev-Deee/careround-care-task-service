@@ -10,4 +10,5 @@ import java.util.UUID;
 public interface CarePlanRepository extends JpaRepository<CarePlan, UUID> {
     Optional<CarePlan> findByPublicId(UUID publicId);
     List<CarePlan> findByPatientIdAndActive(UUID patientId, boolean active);
+    List<CarePlan> findByActive(boolean active);
 }
