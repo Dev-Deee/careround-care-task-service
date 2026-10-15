@@ -67,12 +67,21 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.METHOD_NOT_ALLOWED, ex.getMessage());
     }
 
+    @ExceptionHandler(OutboxEventNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleOutboxEventNotFound(OutboxEventNotFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
         String errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(e -> e.getField() + ": " + e.getDefaultMessage())
                 .collect(Collectors.joining(", "));
         return buildResponse(HttpStatus.BAD_REQUEST, errors);
+    }
+    @ExceptionHandler(MedicationDetailsAlreadyExistException.class)
+    public ResponseEntity<Map<String, Object>> handleMedicationDetailsAlreadyExist(MedicationDetailsAlreadyExistException ex) {
+        return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

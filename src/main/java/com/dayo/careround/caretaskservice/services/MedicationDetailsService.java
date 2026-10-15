@@ -1,0 +1,63 @@
+package com.dayo.careround.caretaskservice.services;
+
+import com.dayo.careround.caretaskservice.data.models.CareTask;
+import com.dayo.careround.caretaskservice.data.models.MedicationDetails;
+import com.dayo.careround.caretaskservice.data.repositories.CareTaskRepository;
+import com.dayo.careround.caretaskservice.data.repositories.MedicationDetailsRepository;
+import com.dayo.careround.caretaskservice.dto.request.AttachMedicationDetailsRequest;
+import com.dayo.careround.caretaskservice.dto.response.MedicationDetailsResponse;
+import com.dayo.careround.caretaskservice.exception.CareTaskNotFoundException;
+import com.dayo.careround.caretaskservice.exception.MedicationDetailsAlreadyExistException;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class MedicationDetailsService {
+
+    private final MedicationDetailsRepository medicationDetailsRepository;
+    private final CareTaskRepository careTaskRepository;
+
+    @Transactional
+    public MedicationDetailsResponse attach(UUID careTaskPublicId, AttachMedicationDetailsRequest request) {
+        CareTask task = careTaskRepository.findByPublicId(careTaskPublicId)
+                .orElseThrow(() -> new CareTaskNotFoundException("No care task with that public id"));
+
+        if (medicationDetailsRepository.findByCareTaskId(task.getId()).isPresent()) {
+            throw new MedicationDetailsAlreadyExistException("Medication details already attached to this task");
+        }
+
+        MedicationDetails details = new MedicationDetails();
+        details.setCareTaskId(task.getId());
+        details.setDrugName(request.drugName());
+        details.setAmount(request.amount());
+        details.setUnit(request.unit());
+        details.setRoute(request.route());
+        details.setFrequency(request.frequency());
+        details.setInstructions(request.instructions());
+
+        medicationDetailsRepository.save(details);
+        return toResponse(details);
+    }
+
+    public MedicationDetailsResponse getByCareTask(UUID careTaskPublicId) {
+        CareTask task = careTaskRepository.findByPublicId(careTaskPublicId)
+                .orElseThrow(() -> new CareTaskNotFoundException("No care task with that public id"));
+
+        MedicationDetails details = medicationDetailsRepository.findByCareTaskId(task.getId())
+                .orElseThrow(() -> new CareTaskNotFoundException("No medication details attached to this task"));
+
+        return toResponse(details);
+    }
+
+    private MedicationDetailsResponse toResponse(MedicationDetails details) {
+        return new MedicationDetailsResponse(
+                details.getId(), details.getCareTaskId(), details.getDrugName(),
+                details.getAmount(), details.getUnit(), details.getRoute(),
+                details.getFrequency(), details.getInstructions(), details.getActualAmountGiven()
+        );
+    }
+}

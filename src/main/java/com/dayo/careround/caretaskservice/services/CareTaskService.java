@@ -1,32 +1,44 @@
 package com.dayo.careround.caretaskservice.services;
 
 import com.dayo.careround.caretaskservice.data.models.CareTask;
+import com.dayo.careround.caretaskservice.data.models.OutboxEvent;
 import com.dayo.careround.caretaskservice.data.models.TaskTypeDefinition;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskOrigin;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskStatus;
+import com.dayo.careround.caretaskservice.data.models.enums.OutboxStatus;
 import com.dayo.careround.caretaskservice.data.repositories.CareTaskRepository;
+import com.dayo.careround.caretaskservice.data.repositories.MedicationDetailsRepository;
+import com.dayo.careround.caretaskservice.data.repositories.OutboxEventRepository;
 import com.dayo.careround.caretaskservice.data.repositories.TaskTypeDefinitionRepository;
 import com.dayo.careround.caretaskservice.dto.request.CancelCareTaskRequest;
 import com.dayo.careround.caretaskservice.dto.request.CreateCareTaskRequest;
 import com.dayo.careround.caretaskservice.dto.request.RefuseCareTaskRequest;
 import com.dayo.careround.caretaskservice.dto.response.CareTaskResponse;
 import com.dayo.careround.caretaskservice.exception.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CareTaskService {
 
     private static final Duration UNDO_WINDOW = Duration.ofSeconds(10);
 
     private final CareTaskRepository careTaskRepository;
     private final TaskTypeDefinitionRepository taskTypeDefinitionRepository;
+    private final OutboxEventRepository outboxEventRepository;
+    private final MedicationDetailsRepository medicationDetailsRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public CareTaskResponse create(UUID createdBy, String creatorRole, CreateCareTaskRequest request) {
@@ -122,7 +134,34 @@ public class CareTaskService {
 
         task.setStatus(CareTaskStatus.COMPLETED);
         careTaskRepository.save(task);
+
+        publishMedicationAdministeredIfApplicable(task, nurseId);
+
         return toResponse(task);
+    }
+
+    private void publishMedicationAdministeredIfApplicable(CareTask task, UUID administeredBy) {
+        medicationDetailsRepository.findByCareTaskId(task.getId()).ifPresent(details -> {
+            try {
+                Map<String, Object> payload = new HashMap<>();
+                payload.put("patientId", task.getPatientId().toString());
+                payload.put("careTaskId", task.getId().toString());
+                payload.put("prescribedBy", task.getCreatedBy().toString()); // the doctor who ordered it
+                payload.put("drugName", details.getDrugName());
+                payload.put("administeredBy", administeredBy.toString());
+
+                OutboxEvent event = new OutboxEvent();
+                event.setIdempotencyKey("medication-administered-" + task.getId());
+                event.setEventType("MEDICATION_ADMINISTERED");
+                event.setStatus(OutboxStatus.PENDING);
+                event.setPayload(objectMapper.writeValueAsString(payload));
+                event.setAttempts(0);
+                event.setNextRetryAt(Instant.now());
+                outboxEventRepository.save(event);
+            } catch (Exception e) {
+                log.error("Failed to build MEDICATION_ADMINISTERED outbox event: {}", e.getMessage(), e);
+            }
+        });
     }
 
     @Transactional
