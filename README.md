@@ -9,7 +9,6 @@ DB `careround_care_task_db`.
 - **Events (outbox → Kafka):** `MEDICATION_ADMINISTERED` when a task with medication details is completed.
 - **gRPC server (9094):** `CareTaskQueryService` (pending task ids per patient, used by round-service).
 - **Scheduled:** `CarePlanScheduler` (generates tasks on each plan's cadence), outbox publisher.
-- A patient-service gRPC client address is configured but not used by any code yet.
 
 ## Environment variables
 
