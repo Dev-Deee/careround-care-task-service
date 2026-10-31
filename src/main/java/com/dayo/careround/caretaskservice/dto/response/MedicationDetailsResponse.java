@@ -8,12 +8,13 @@ import java.util.UUID;
 
 public record MedicationDetailsResponse(
         UUID id,
-        UUID careTaskId,
+        UUID careTaskId, // deprecated: internal id; use careTaskPublicId
         String drugName,
         BigDecimal amount,
         MedicationUnit unit,
         MedicationRoute route,
         String frequency,
         String instructions,
-        BigDecimal actualAmountGiven
+        BigDecimal actualAmountGiven,
+        UUID careTaskPublicId
 ) {}

@@ -35,7 +35,11 @@ public class CareTask {
     private CareTaskOrigin origin;
 
     @Column
-    private UUID carePlanId;
+    private UUID carePlanId; // deprecated: plan internal id (scheduler) or whatever a client sent; use carePlanPublicId
+
+    // The plan's publicId (client-facing id). Null for tasks created before it existed (see README backfill SQL).
+    @Column
+    private UUID carePlanPublicId;
 
     @Column
     private UUID assignedNurseId;

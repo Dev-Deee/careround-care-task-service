@@ -17,6 +17,9 @@ import com.dayo.careround.caretaskservice.dto.response.CareTaskResponse;
 import com.dayo.careround.caretaskservice.exception.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
+import com.dayo.careround.caretaskservice.data.models.CarePlan;
+import com.dayo.careround.caretaskservice.data.repositories.CarePlanRepository;
+import com.dayo.careround.caretaskservice.exception.CarePlanNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,6 +41,7 @@ public class CareTaskService {
     private final TaskTypeDefinitionRepository taskTypeDefinitionRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final MedicationDetailsRepository medicationDetailsRepository;
+    private final CarePlanRepository carePlanRepository;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -67,6 +71,12 @@ public class CareTaskService {
         task.setPriority(request.priority());
         task.setOrigin(request.origin());
         task.setCarePlanId(request.carePlanId());
+        if (request.carePlanId() != null) {
+            // carePlanId from a client is the plan's publicId (the id the API returns).
+            CarePlan plan = carePlanRepository.findByPublicId(request.carePlanId())
+                    .orElseThrow(() -> new CarePlanNotFoundException("No care plan with that public id"));
+            task.setCarePlanPublicId(plan.getPublicId());
+        }
         task.setAssignedNurseId(request.assignedNurseId()); // nullable — leaves it poolable
         task.setWindowStart(request.windowStart());
         task.setDeadline(request.deadline());
@@ -145,7 +155,8 @@ public class CareTaskService {
             try {
                 Map<String, Object> payload = new HashMap<>();
                 payload.put("patientId", task.getPatientId().toString());
-                payload.put("careTaskId", task.getId().toString());
+                payload.put("careTaskId", task.getId().toString()); // deprecated: internal id
+                payload.put("careTaskPublicId", task.getPublicId().toString());
                 payload.put("prescribedBy", task.getCreatedBy().toString()); // the doctor who ordered it
                 payload.put("drugName", details.getDrugName());
                 payload.put("administeredBy", administeredBy.toString());
@@ -229,7 +240,8 @@ public class CareTaskService {
                 task.getPublicId(), task.getPatientId(), task.getType().getName(),
                 task.getPriority(), task.getOrigin(), task.getCarePlanId(),
                 task.getAssignedNurseId(), task.getWindowStart(), task.getDeadline(),
-                task.getStatus(), task.getCreatedBy(), task.getUndoWindowExpiresAt()
+                task.getStatus(), task.getCreatedBy(), task.getUndoWindowExpiresAt(),
+                task.getCarePlanPublicId()
         );
     }
 }

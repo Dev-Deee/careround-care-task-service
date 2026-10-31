@@ -73,6 +73,7 @@ public class CarePlanService {
                 ? CareTaskOrigin.DOCTOR_ORDER
                 : CareTaskOrigin.NURSING_CARE_PLAN);
         task.setCarePlanId(plan.getId());
+        task.setCarePlanPublicId(plan.getPublicId());
         task.setWindowStart(Instant.now());
         task.setDeadline(Instant.now().plus(Duration.ofHours(plan.getIntervalHours())));
         task.setStatus(CareTaskStatus.PENDING);
