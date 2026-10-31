@@ -246,7 +246,7 @@ public class CareTaskService {
                 task.getAssignedNurseId(), task.getWindowStart(), task.getDeadline(),
                 task.getStatus(), task.getCreatedBy(), task.getUndoWindowExpiresAt(),
                 task.getCarePlanPublicId(), task.getWardId(), task.getCreatedAt(), task.getCompletedAt(),
-                CareTaskQueryService.isOverdueDerived(task, Instant.now())
+                CareTaskQueryService.isOverdueDerived(task, Instant.now()), task.getType().getId()
         );
     }
 }

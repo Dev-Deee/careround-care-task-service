@@ -23,5 +23,6 @@ public record CareTaskResponse(
         UUID wardId,
         Instant createdAt,
         Instant completedAt,
-        boolean overdueDerived
+        boolean overdueDerived,
+        UUID taskTypeId
 ) {}

@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.UUID;
@@ -47,7 +48,8 @@ public class CareTaskQueryService {
                          CareTaskStatus status, Integer priority, boolean overdueDerived) {}
 
     @Transactional(readOnly = true)
-    public Page<CareTask> list(Filter f, Integer page, Integer size) {
+    // Mapped inside the transaction: the task type is lazy.
+    public <T> PageResponse<T> list(Filter f, Integer page, Integer size, Function<CareTask, T> mapper) {
         if (f.wardId() == null && f.patientId() == null && f.assignedNurseId() == null) {
             throw new BadRequestException("Give at least one of wardId, patientId, assignedNurseId or mine=true");
         }
@@ -72,7 +74,7 @@ public class CareTaskQueryService {
         };
         Pageable pageable = PageRequest.of(page == null ? 0 : Math.max(page, 0),
                 size == null ? DEFAULT_SIZE : Math.min(Math.max(size, 1), MAX_SIZE), ORDER);
-        return careTaskRepository.findAll(spec, pageable);
+        return PageResponse.of(careTaskRepository.findAll(spec, pageable), mapper);
     }
 
     // The prescriber view: the caller's own medication orders for one patient, newest deadline first.

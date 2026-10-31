@@ -70,7 +70,7 @@ public class CareTaskController {
         }
         UUID nurse = mine ? principal.userId() : assignedNurseId;
         var filter = new CareTaskQueryService.Filter(wardId, patientId, nurse, unassigned, status, priority, overdueDerived);
-        return ResponseEntity.ok(PageResponse.of(careTaskQueryService.list(filter, page, size), careTaskService::toResponse));
+        return ResponseEntity.ok(careTaskQueryService.list(filter, page, size, careTaskService::toResponse));
     }
 
     @PostMapping
