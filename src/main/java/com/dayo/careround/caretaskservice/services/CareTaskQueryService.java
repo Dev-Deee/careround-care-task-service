@@ -2,7 +2,11 @@ package com.dayo.careround.caretaskservice.services;
 
 import com.dayo.careround.caretaskservice.data.models.CareTask;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskStatus;
+import com.dayo.careround.caretaskservice.data.models.MedicationDetails;
 import com.dayo.careround.caretaskservice.data.repositories.CareTaskRepository;
+import com.dayo.careround.caretaskservice.data.repositories.MedicationDetailsRepository;
+import com.dayo.careround.caretaskservice.dto.response.MedicationLogEntryResponse;
+import com.dayo.careround.caretaskservice.dto.response.PageResponse;
 import com.dayo.careround.caretaskservice.exception.BadRequestException;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
 // Read side of care tasks: filtered, paged lists. "Overdue" is derived here (deadline passed while PENDING or
@@ -31,6 +37,7 @@ public class CareTaskQueryService {
     private static final Sort ORDER = Sort.by("deadline", "createdAt", "id");
 
     private final CareTaskRepository careTaskRepository;
+    private final MedicationDetailsRepository medicationDetailsRepository;
 
     public record Filter(UUID wardId, UUID patientId, UUID assignedNurseId, boolean unassigned,
                          CareTaskStatus status, Integer priority, boolean overdueDerived) {}
@@ -62,6 +69,27 @@ public class CareTaskQueryService {
         Pageable pageable = PageRequest.of(page == null ? 0 : Math.max(page, 0),
                 size == null ? DEFAULT_SIZE : Math.min(Math.max(size, 1), MAX_SIZE), ORDER);
         return careTaskRepository.findAll(spec, pageable);
+    }
+
+    // The prescriber view: the caller's own medication orders for one patient, newest deadline first.
+    @Transactional(readOnly = true)
+    public PageResponse<MedicationLogEntryResponse> medicationLog(UUID patientId, UUID doctorId, Integer page, Integer size) {
+        Pageable pageable = PageRequest.of(page == null ? 0 : Math.max(page, 0),
+                size == null ? DEFAULT_SIZE : Math.min(Math.max(size, 1), MAX_SIZE),
+                Sort.by(Sort.Order.desc("deadline"), Sort.Order.desc("createdAt"), Sort.Order.asc("id")));
+        Page<CareTask> tasks = careTaskRepository.findMedicationOrders(patientId, doctorId, pageable);
+        Map<UUID, MedicationDetails> details = medicationDetailsRepository
+                .findByCareTaskIdIn(tasks.map(CareTask::getId).getContent()).stream()
+                .collect(Collectors.toMap(MedicationDetails::getCareTaskId, d -> d));
+        Instant now = Instant.now();
+        return PageResponse.of(tasks, t -> {
+            MedicationDetails d = details.get(t.getId());
+            boolean given = t.getStatus() == CareTaskStatus.COMPLETED;
+            return new MedicationLogEntryResponse(t.getPublicId(), t.getPatientId(), t.getWardId(),
+                    d.getDrugName(), d.getAmount(), d.getUnit(), d.getRoute(), d.getFrequency(), d.getInstructions(),
+                    d.getActualAmountGiven(), t.getStatus(), t.getWindowStart(), t.getDeadline(), t.getCreatedAt(),
+                    given ? t.getCompletedAt() : null, given ? t.getAssignedNurseId() : null, isOverdueDerived(t, now));
+        });
     }
 
     public static boolean isOverdueDerived(CareTask task, Instant now) {

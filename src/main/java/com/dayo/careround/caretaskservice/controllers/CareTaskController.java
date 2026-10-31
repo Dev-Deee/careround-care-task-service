@@ -8,6 +8,7 @@ import com.dayo.careround.caretaskservice.security.CareRoundPrincipal;
 import com.dayo.careround.caretaskservice.services.CareTaskService;
 import jakarta.validation.Valid;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskStatus;
+import com.dayo.careround.caretaskservice.dto.response.MedicationLogEntryResponse;
 import com.dayo.careround.caretaskservice.dto.response.PageResponse;
 import com.dayo.careround.caretaskservice.exception.BadRequestException;
 import com.dayo.careround.caretaskservice.services.CareTaskQueryService;
@@ -59,6 +60,17 @@ public class CareTaskController {
             @AuthenticationPrincipal CareRoundPrincipal principal) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(careTaskService.create(principal.userId(), principal.role(), request));
+    }
+
+    // Prescriber view (FR-12.4): the calling doctor's own medication orders for a patient, with administration status.
+    @GetMapping("/medication-log")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<PageResponse<MedicationLogEntryResponse>> medicationLog(
+            @RequestParam UUID patientId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @AuthenticationPrincipal CareRoundPrincipal principal) {
+        return ResponseEntity.ok(careTaskQueryService.medicationLog(patientId, principal.userId(), page, size));
     }
 
     @GetMapping("/{publicId}")
