@@ -20,6 +20,7 @@ import jakarta.transaction.Transactional;
 import com.dayo.careround.caretaskservice.data.models.CarePlan;
 import com.dayo.careround.caretaskservice.data.repositories.CarePlanRepository;
 import com.dayo.careround.caretaskservice.exception.CarePlanNotFoundException;
+import com.dayo.careround.caretaskservice.grpc.PatientLookupClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,7 @@ public class CareTaskService {
     private final OutboxEventRepository outboxEventRepository;
     private final MedicationDetailsRepository medicationDetailsRepository;
     private final CarePlanRepository carePlanRepository;
+    private final PatientLookupClient patientLookupClient;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -67,6 +69,7 @@ public class CareTaskService {
 
         CareTask task = new CareTask();
         task.setPatientId(request.patientId());
+        task.setWardId(patientLookupClient.wardOf(request.patientId()));
         task.setType(taskType);
         task.setPriority(request.priority());
         task.setOrigin(request.origin());
@@ -241,7 +244,7 @@ public class CareTaskService {
                 task.getPriority(), task.getOrigin(), task.getCarePlanId(),
                 task.getAssignedNurseId(), task.getWindowStart(), task.getDeadline(),
                 task.getStatus(), task.getCreatedBy(), task.getUndoWindowExpiresAt(),
-                task.getCarePlanPublicId()
+                task.getCarePlanPublicId(), task.getWardId()
         );
     }
 }

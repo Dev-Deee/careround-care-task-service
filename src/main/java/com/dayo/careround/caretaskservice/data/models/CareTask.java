@@ -23,6 +23,10 @@ public class CareTask {
     @Column(nullable = false)
     private UUID patientId;
 
+    // The patient's ward (publicId) at creation, from patient-service. Null for older rows (see README backfill).
+    @Column
+    private UUID wardId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "task_type_id", nullable = false)
     private TaskTypeDefinition type;

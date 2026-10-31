@@ -19,5 +19,6 @@ public record CareTaskResponse(
         CareTaskStatus status,
         UUID createdBy,
         Instant undoWindowExpiresAt,
-        UUID carePlanPublicId
+        UUID carePlanPublicId,
+        UUID wardId
 ) {}

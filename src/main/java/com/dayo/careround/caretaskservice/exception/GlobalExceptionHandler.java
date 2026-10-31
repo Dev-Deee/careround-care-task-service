@@ -19,6 +19,16 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(PatientNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handlePatientNotFound(PatientNotFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(DownstreamServiceUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleDownstreamUnavailable(DownstreamServiceUnavailableException ex) {
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
     @ExceptionHandler(CareTaskNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleCareTaskNotFound(CareTaskNotFoundException ex) {
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
