@@ -59,7 +59,7 @@ public class MedicationDetailsService {
         details.setInstructions(request.instructions());
 
         medicationDetailsRepository.save(details);
-        return toResponse(details);
+        return toResponse(details, task);
     }
 
     public MedicationDetailsResponse getByCareTask(UUID careTaskPublicId) {
@@ -69,14 +69,15 @@ public class MedicationDetailsService {
         MedicationDetails details = medicationDetailsRepository.findByCareTaskId(task.getId())
                 .orElseThrow(() -> new CareTaskNotFoundException("No medication details attached to this task"));
 
-        return toResponse(details);
+        return toResponse(details, task);
     }
 
-    private MedicationDetailsResponse toResponse(MedicationDetails details) {
+    private MedicationDetailsResponse toResponse(MedicationDetails details, CareTask task) {
         return new MedicationDetailsResponse(
                 details.getId(), details.getCareTaskId(), details.getDrugName(),
                 details.getAmount(), details.getUnit(), details.getRoute(),
-                details.getFrequency(), details.getInstructions(), details.getActualAmountGiven()
+                details.getFrequency(), details.getInstructions(), details.getActualAmountGiven(),
+                task.getPublicId()
         );
     }
 }

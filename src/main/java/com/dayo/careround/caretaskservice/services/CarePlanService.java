@@ -14,7 +14,9 @@ import com.dayo.careround.caretaskservice.exception.CarePlanNotFoundException;
 import com.dayo.careround.caretaskservice.exception.CareProtocolNotFoundException;
 import jakarta.transaction.Transactional;
 import com.dayo.careround.caretaskservice.exception.InvalidTaskOriginException;
+import com.dayo.careround.caretaskservice.grpc.PatientLookupClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -22,6 +24,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CarePlanService {
@@ -29,6 +32,7 @@ public class CarePlanService {
     private final CarePlanRepository carePlanRepository;
     private final CareProtocolRepository careProtocolRepository;
     private final CareTaskRepository careTaskRepository;
+    private final PatientLookupClient patientLookupClient;
 
     @Transactional
     public CarePlanResponse create(UUID createdBy, String creatorRole, CreateCarePlanRequest request) {
@@ -42,6 +46,8 @@ public class CarePlanService {
             throw new InvalidTaskOriginException(
                     "This protocol's task type requires a doctor's order - only a doctor may start this care plan");
         }
+
+        patientLookupClient.wardOf(request.patientId()); // unknown patient 404, patient-service down 503
 
         CarePlan plan = new CarePlan();
         plan.setPatientId(request.patientId());
@@ -67,12 +73,19 @@ public class CarePlanService {
     public void generateNextTask(CarePlan plan) {
         CareTask task = new CareTask();
         task.setPatientId(plan.getPatientId());
+        // Best effort for scheduled generation: a lookup failure must not stop the schedule.
+        try {
+            task.setWardId(patientLookupClient.wardOf(plan.getPatientId()));
+        } catch (RuntimeException e) {
+            log.warn("Could not resolve ward for patient {} while generating a care-plan task: {}", plan.getPatientId(), e.getMessage());
+        }
         task.setType(plan.getProtocol().getTaskType());
         task.setPriority(plan.getProtocol().getTaskType().getDefaultPriority());
         task.setOrigin(plan.getProtocol().getTaskType().isRequiresDoctorOrder()
                 ? CareTaskOrigin.DOCTOR_ORDER
                 : CareTaskOrigin.NURSING_CARE_PLAN);
         task.setCarePlanId(plan.getId());
+        task.setCarePlanPublicId(plan.getPublicId());
         task.setWindowStart(Instant.now());
         task.setDeadline(Instant.now().plus(Duration.ofHours(plan.getIntervalHours())));
         task.setStatus(CareTaskStatus.PENDING);

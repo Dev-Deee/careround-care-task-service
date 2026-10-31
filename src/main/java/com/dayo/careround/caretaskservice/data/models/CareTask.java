@@ -23,6 +23,10 @@ public class CareTask {
     @Column(nullable = false)
     private UUID patientId;
 
+    // The patient's ward (publicId) at creation, from patient-service. Null for older rows (see README backfill).
+    @Column
+    private UUID wardId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "task_type_id", nullable = false)
     private TaskTypeDefinition type;
@@ -35,7 +39,11 @@ public class CareTask {
     private CareTaskOrigin origin;
 
     @Column
-    private UUID carePlanId;
+    private UUID carePlanId; // deprecated: plan internal id (scheduler) or whatever a client sent; use carePlanPublicId
+
+    // The plan's publicId (client-facing id). Null for tasks created before it existed (see README backfill SQL).
+    @Column
+    private UUID carePlanPublicId;
 
     @Column
     private UUID assignedNurseId;
@@ -55,6 +63,14 @@ public class CareTask {
 
     @Column(nullable = false)
     private Instant undoWindowExpiresAt;
+
+    // Null for rows created before these columns existed.
+    @Column(updatable = false)
+    private Instant createdAt = Instant.now();
+
+    // When the task reached COMPLETED (the administered time for medication tasks).
+    @Column
+    private Instant completedAt;
 
     @Column
     private UUID cancelledBy;
