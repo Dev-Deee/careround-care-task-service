@@ -98,12 +98,13 @@ public class CareTaskQueryService {
         });
     }
 
-    // Ward aggregate; window defaults to the last 24 hours. Authorisation is the caller's job (controller).
+    // Ward aggregate; the window defaults to now - 24h .. now + 24h (yesterday's and today's work, including tasks
+    // not yet due). Authorisation is the caller's job (controller).
     @Transactional(readOnly = true)
     public CareTaskStatsResponse stats(UUID wardId, Instant from, Instant to) {
         Instant now = Instant.now();
-        Instant end = to == null ? now : to;
-        Instant start = from == null ? end.minus(Duration.ofHours(24)) : from;
+        Instant start = from == null ? now.minus(Duration.ofHours(24)) : from;
+        Instant end = to == null ? now.plus(Duration.ofHours(24)) : to;
         if (!start.isBefore(end)) throw new BadRequestException("from must be before to");
         Map<String, Long> byStatus = new LinkedHashMap<>();
         for (CareTaskStatus st : CareTaskStatus.values()) if (st != CareTaskStatus.RETRACTED) byStatus.put(st.name(), 0L);

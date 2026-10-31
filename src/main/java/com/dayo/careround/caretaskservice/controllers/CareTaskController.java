@@ -35,7 +35,7 @@ public class CareTaskController {
     private final ChargeVerificationClient chargeVerificationClient;
 
     // Ward supervision aggregate: ADMIN, or the ward's active charge nurse (checked live with ward-service; 503 if it
-    // cannot be reached). Everyone else 403. from/to are ISO instants; default window is the last 24 hours.
+    // cannot be reached). Everyone else 403. from/to are ISO instants; default window now - 24h .. now + 24h.
     @GetMapping("/stats")
     @PreAuthorize("hasRole('ADMIN') or hasRole('NURSE')")
     public ResponseEntity<CareTaskStatsResponse> stats(
