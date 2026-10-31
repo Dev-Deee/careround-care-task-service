@@ -13,6 +13,7 @@ import com.dayo.careround.caretaskservice.dto.response.CarePlanResponse;
 import com.dayo.careround.caretaskservice.exception.CarePlanNotFoundException;
 import com.dayo.careround.caretaskservice.exception.CareProtocolNotFoundException;
 import jakarta.transaction.Transactional;
+import com.dayo.careround.caretaskservice.exception.InvalidTaskOriginException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -30,9 +31,17 @@ public class CarePlanService {
     private final CareTaskRepository careTaskRepository;
 
     @Transactional
-    public CarePlanResponse create(UUID createdBy, CreateCarePlanRequest request) {
+    public CarePlanResponse create(UUID createdBy, String creatorRole, CreateCarePlanRequest request) {
         CareProtocol protocol = careProtocolRepository.findById(request.protocolId())
                 .orElseThrow(() -> new CareProtocolNotFoundException("No care protocol with that id"));
+
+        // Generated tasks take their origin from the task type. A nurse-created plan must only generate
+        // NURSING_CARE_PLAN tasks (FR-2.9/FR-11.1), so a protocol whose task type needs a doctor's order can only be
+        // started by a doctor - the same rule as creating such a task by hand.
+        if (protocol.getTaskType().isRequiresDoctorOrder() && !"DOCTOR".equals(creatorRole)) {
+            throw new InvalidTaskOriginException(
+                    "This protocol's task type requires a doctor's order - only a doctor may start this care plan");
+        }
 
         CarePlan plan = new CarePlan();
         plan.setPatientId(request.patientId());

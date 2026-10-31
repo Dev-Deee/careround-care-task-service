@@ -27,7 +27,7 @@ public class CarePlanController {
             @Valid @RequestBody CreateCarePlanRequest request,
             @AuthenticationPrincipal CareRoundPrincipal principal) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(carePlanService.create(principal.userId(), request));
+                .body(carePlanService.create(principal.userId(), principal.role(), request));
     }
 
     @GetMapping("/{publicId}")
