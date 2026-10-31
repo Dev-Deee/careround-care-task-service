@@ -5,6 +5,7 @@ import com.dayo.careround.caretaskservice.data.models.enums.CareTaskStatus;
 import com.dayo.careround.caretaskservice.data.models.MedicationDetails;
 import com.dayo.careround.caretaskservice.data.repositories.CareTaskRepository;
 import com.dayo.careround.caretaskservice.data.repositories.MedicationDetailsRepository;
+import com.dayo.careround.caretaskservice.dto.response.CareTaskStatsResponse;
 import com.dayo.careround.caretaskservice.dto.response.MedicationLogEntryResponse;
 import com.dayo.careround.caretaskservice.dto.response.PageResponse;
 import com.dayo.careround.caretaskservice.exception.BadRequestException;
@@ -18,10 +19,13 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.UUID;
 
@@ -90,6 +94,26 @@ public class CareTaskQueryService {
                     d.getActualAmountGiven(), t.getStatus(), t.getWindowStart(), t.getDeadline(), t.getCreatedAt(),
                     given ? t.getCompletedAt() : null, given ? t.getAssignedNurseId() : null, isOverdueDerived(t, now));
         });
+    }
+
+    // Ward aggregate; window defaults to the last 24 hours. Authorisation is the caller's job (controller).
+    @Transactional(readOnly = true)
+    public CareTaskStatsResponse stats(UUID wardId, Instant from, Instant to) {
+        Instant now = Instant.now();
+        Instant end = to == null ? now : to;
+        Instant start = from == null ? end.minus(Duration.ofHours(24)) : from;
+        if (!start.isBefore(end)) throw new BadRequestException("from must be before to");
+        Map<String, Long> byStatus = new LinkedHashMap<>();
+        for (CareTaskStatus st : CareTaskStatus.values()) if (st != CareTaskStatus.RETRACTED) byStatus.put(st.name(), 0L);
+        for (Object[] row : careTaskRepository.countByStatus(wardId, start, end)) byStatus.put(((CareTaskStatus) row[0]).name(), (Long) row[1]);
+        Map<Integer, Long> byPriority = new TreeMap<>();
+        for (Object[] row : careTaskRepository.countByPriority(wardId, start, end)) byPriority.put((Integer) row[0], (Long) row[1]);
+        long total = byStatus.values().stream().mapToLong(Long::longValue).sum();
+        Double completionRate = total == 0 ? null : byStatus.get(CareTaskStatus.COMPLETED.name()) / (double) total;
+        long overdue = careTaskRepository.countByWardIdAndStatusInAndDeadlineBefore(wardId, OPEN, now);
+        Long oldest = careTaskRepository.findFirstByWardIdAndStatusInAndDeadlineBeforeOrderByDeadlineAsc(wardId, OPEN, now)
+                .map(t -> Duration.between(t.getDeadline(), now).toSeconds()).orElse(null);
+        return new CareTaskStatsResponse(wardId, start, end, total, byStatus, byPriority, completionRate, overdue, oldest, now);
     }
 
     public static boolean isOverdueDerived(CareTask task, Instant now) {

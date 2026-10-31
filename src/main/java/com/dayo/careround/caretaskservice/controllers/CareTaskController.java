@@ -8,7 +8,11 @@ import com.dayo.careround.caretaskservice.security.CareRoundPrincipal;
 import com.dayo.careround.caretaskservice.services.CareTaskService;
 import jakarta.validation.Valid;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskStatus;
+import com.dayo.careround.caretaskservice.dto.response.CareTaskStatsResponse;
 import com.dayo.careround.caretaskservice.dto.response.MedicationLogEntryResponse;
+import com.dayo.careround.caretaskservice.grpc.ChargeVerificationClient;
+import org.springframework.security.access.AccessDeniedException;
+import java.time.Instant;
 import com.dayo.careround.caretaskservice.dto.response.PageResponse;
 import com.dayo.careround.caretaskservice.exception.BadRequestException;
 import com.dayo.careround.caretaskservice.services.CareTaskQueryService;
@@ -28,6 +32,22 @@ public class CareTaskController {
 
     private final CareTaskService careTaskService;
     private final CareTaskQueryService careTaskQueryService;
+    private final ChargeVerificationClient chargeVerificationClient;
+
+    // Ward supervision aggregate: ADMIN, or the ward's active charge nurse (checked live with ward-service; 503 if it
+    // cannot be reached). Everyone else 403. from/to are ISO instants; default window is the last 24 hours.
+    @GetMapping("/stats")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('NURSE')")
+    public ResponseEntity<CareTaskStatsResponse> stats(
+            @RequestParam UUID wardId,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
+            @AuthenticationPrincipal CareRoundPrincipal principal) {
+        if (!"ADMIN".equals(principal.role()) && !chargeVerificationClient.isActiveChargeNurse(wardId, principal.userId())) {
+            throw new AccessDeniedException("Only the ward's active charge nurse or an admin can view ward task stats");
+        }
+        return ResponseEntity.ok(careTaskQueryService.stats(wardId, from, to));
+    }
 
     // Filtered, paged task list. At least one of wardId, patientId, assignedNurseId or mine=true is required.
     // mine=true means "assigned to me" (the caller's id). Sorted by deadline, then createdAt; size 20, max 100.

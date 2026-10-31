@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package careround.ward;
+
+option java_package = "com.dayo.careround.wardservice.grpc";
+option java_multiple_files = true;
+
+service ChargeVerificationService {
+  rpc IsActiveChargeNurse (ChargeVerificationRequest) returns (ChargeVerificationResponse);
+}
+
+message ChargeVerificationRequest {
+  string ward_id = 1;
+  string nurse_id = 2;
+}
+
+message ChargeVerificationResponse {
+  bool is_active_charge_nurse = 1;
+}
