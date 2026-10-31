@@ -19,6 +19,11 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleBadRequest(BadRequestException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
     @ExceptionHandler(PatientNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handlePatientNotFound(PatientNotFoundException ex) {
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());

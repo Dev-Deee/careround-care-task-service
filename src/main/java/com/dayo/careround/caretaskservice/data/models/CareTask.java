@@ -64,6 +64,14 @@ public class CareTask {
     @Column(nullable = false)
     private Instant undoWindowExpiresAt;
 
+    // Null for rows created before these columns existed.
+    @Column(updatable = false)
+    private Instant createdAt = Instant.now();
+
+    // When the task reached COMPLETED (the administered time for medication tasks).
+    @Column
+    private Instant completedAt;
+
     @Column
     private UUID cancelledBy;
 

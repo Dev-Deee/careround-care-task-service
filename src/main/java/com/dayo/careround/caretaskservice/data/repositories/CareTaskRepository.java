@@ -3,13 +3,14 @@ package com.dayo.careround.caretaskservice.data.repositories;
 import com.dayo.careround.caretaskservice.data.models.CareTask;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface CareTaskRepository extends JpaRepository<CareTask, UUID> {
+public interface CareTaskRepository extends JpaRepository<CareTask, UUID>, JpaSpecificationExecutor<CareTask> {
     Optional<CareTask> findByPublicId(UUID publicId);
     List<CareTask> findByPatientId(UUID patientId);
     List<CareTask> findByAssignedNurseIdAndStatus(UUID assignedNurseId, CareTaskStatus status);

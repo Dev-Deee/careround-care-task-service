@@ -146,6 +146,7 @@ public class CareTaskService {
         }
 
         task.setStatus(CareTaskStatus.COMPLETED);
+        task.setCompletedAt(Instant.now());
         careTaskRepository.save(task);
 
         publishMedicationAdministeredIfApplicable(task, nurseId);
@@ -238,13 +239,14 @@ public class CareTaskService {
                 .orElseThrow(() -> new CareTaskNotFoundException("No care task with that public id"));
     }
 
-    private CareTaskResponse toResponse(CareTask task) {
+    public CareTaskResponse toResponse(CareTask task) {
         return new CareTaskResponse(
                 task.getPublicId(), task.getPatientId(), task.getType().getName(),
                 task.getPriority(), task.getOrigin(), task.getCarePlanId(),
                 task.getAssignedNurseId(), task.getWindowStart(), task.getDeadline(),
                 task.getStatus(), task.getCreatedBy(), task.getUndoWindowExpiresAt(),
-                task.getCarePlanPublicId(), task.getWardId()
+                task.getCarePlanPublicId(), task.getWardId(), task.getCreatedAt(), task.getCompletedAt(),
+                CareTaskQueryService.isOverdueDerived(task, Instant.now())
         );
     }
 }
