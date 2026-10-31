@@ -1,5 +1,7 @@
 package com.dayo.careround.caretaskservice.exception;
 
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -13,6 +15,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -100,8 +103,17 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    // A path no controller maps (e.g. GET /api/v1/x/ with no id) reaches the static-resource handler, which
+    // throws this since Spring Framework 6.1. It is a client mistake: 404, not the generic 500 below.
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoResource(NoResourceFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, "No endpoint " + ex.getHttpMethod() + " /" + ex.getResourcePath());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneral(Exception ex) {
+        // Logged with the stack trace so unexpected failures are visible; the client still gets only the generic body.
+        log.error("Unhandled exception: {}", ex.toString(), ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
     }
 
