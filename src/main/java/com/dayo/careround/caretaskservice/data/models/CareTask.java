@@ -72,6 +72,10 @@ public class CareTask {
     @Column
     private Instant completedAt;
 
+    // When the overdue timer fired (status became OVERDUE). Null otherwise.
+    @Column
+    private Instant overdueAt;
+
     @Column
     private UUID cancelledBy;
 

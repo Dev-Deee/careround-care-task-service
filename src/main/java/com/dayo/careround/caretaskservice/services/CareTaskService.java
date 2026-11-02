@@ -1,5 +1,6 @@
 package com.dayo.careround.caretaskservice.services;
 
+import com.dayo.careround.caretaskservice.data.models.enums.PriorityLevel;
 import com.dayo.careround.caretaskservice.data.models.CareTask;
 import com.dayo.careround.caretaskservice.data.models.OutboxEvent;
 import com.dayo.careround.caretaskservice.data.models.TaskTypeDefinition;
@@ -7,7 +8,6 @@ import com.dayo.careround.caretaskservice.data.models.enums.CareTaskOrigin;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskStatus;
 import com.dayo.careround.caretaskservice.data.models.enums.OutboxStatus;
 import com.dayo.careround.caretaskservice.data.repositories.CareTaskRepository;
-import com.dayo.careround.caretaskservice.data.repositories.MedicationDetailsRepository;
 import com.dayo.careround.caretaskservice.data.repositories.OutboxEventRepository;
 import com.dayo.careround.caretaskservice.data.repositories.TaskTypeDefinitionRepository;
 import com.dayo.careround.caretaskservice.dto.request.CancelCareTaskRequest;
@@ -21,6 +21,7 @@ import com.dayo.careround.caretaskservice.data.models.CarePlan;
 import com.dayo.careround.caretaskservice.data.repositories.CarePlanRepository;
 import com.dayo.careround.caretaskservice.exception.CarePlanNotFoundException;
 import com.dayo.careround.caretaskservice.grpc.PatientLookupClient;
+import com.dayo.careround.caretaskservice.overdue.OverdueScheduler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,10 +42,11 @@ public class CareTaskService {
     private final CareTaskRepository careTaskRepository;
     private final TaskTypeDefinitionRepository taskTypeDefinitionRepository;
     private final OutboxEventRepository outboxEventRepository;
-    private final MedicationDetailsRepository medicationDetailsRepository;
     private final CarePlanRepository carePlanRepository;
     private final PatientLookupClient patientLookupClient;
     private final ObjectMapper objectMapper;
+    private final MedicationRule medicationRule;
+    private final OverdueScheduler overdueScheduler;
 
     @Transactional
     public CareTaskResponse create(UUID createdBy, String creatorRole, CreateCareTaskRequest request) {
@@ -71,7 +73,7 @@ public class CareTaskService {
         task.setPatientId(request.patientId());
         task.setWardId(patientLookupClient.wardOf(request.patientId()));
         task.setType(taskType);
-        task.setPriority(request.priority());
+        task.setPriority(PriorityLevel.resolve(request.priority(), request.priorityLevel(), "priority"));
         task.setOrigin(request.origin());
         task.setCarePlanId(request.carePlanId());
         if (request.carePlanId() != null) {
@@ -88,6 +90,7 @@ public class CareTaskService {
         task.setUndoWindowExpiresAt(Instant.now().plus(UNDO_WINDOW));
 
         careTaskRepository.save(task);
+        overdueScheduler.scheduleAfterCommit(task.getPublicId(), task.getDeadline());
         return toResponse(task);
     }
 
@@ -108,6 +111,7 @@ public class CareTaskService {
 
         task.setStatus(CareTaskStatus.RETRACTED);
         careTaskRepository.save(task);
+        overdueScheduler.removeAfterCommit(task.getPublicId());
     }
 
     /**
@@ -119,8 +123,9 @@ public class CareTaskService {
     public CareTaskResponse claimOrStart(UUID publicId, UUID nurseId) {
         CareTask task = findOrThrow(publicId);
 
-        if (task.getStatus() != CareTaskStatus.PENDING) {
-            throw new InvalidTaskStateException("Only a PENDING task can be started — current state: " + task.getStatus());
+        // An OVERDUE task can still be claimed and worked (care must still be delivered); it stays OVERDUE.
+        if (task.getStatus() != CareTaskStatus.PENDING && task.getStatus() != CareTaskStatus.OVERDUE) {
+            throw new InvalidTaskStateException("Only a PENDING or OVERDUE task can be started — current state: " + task.getStatus());
         }
 
         if (task.getAssignedNurseId() == null) {
@@ -129,7 +134,9 @@ public class CareTaskService {
             throw new TaskAlreadyClaimedException("This task is already assigned to a different nurse");
         }
 
-        task.setStatus(CareTaskStatus.IN_PROGRESS);
+        if (task.getStatus() == CareTaskStatus.PENDING) {
+            task.setStatus(CareTaskStatus.IN_PROGRESS);
+        }
         careTaskRepository.save(task);
         return toResponse(task);
     }
@@ -138,8 +145,9 @@ public class CareTaskService {
     public CareTaskResponse complete(UUID publicId, UUID nurseId) {
         CareTask task = findOrThrow(publicId);
 
-        if (task.getStatus() != CareTaskStatus.IN_PROGRESS) {
-            throw new InvalidTaskStateException("Only an IN_PROGRESS task can be completed");
+        // OVERDUE completes too (late care is still recorded, and medication still publishes MEDICATION_ADMINISTERED).
+        if (task.getStatus() != CareTaskStatus.IN_PROGRESS && task.getStatus() != CareTaskStatus.OVERDUE) {
+            throw new InvalidTaskStateException("Only an IN_PROGRESS or OVERDUE task can be completed");
         }
         if (!nurseId.equals(task.getAssignedNurseId())) {
             throw new InvalidTaskStateException("Only the assigned nurse may complete this task");
@@ -148,6 +156,7 @@ public class CareTaskService {
         task.setStatus(CareTaskStatus.COMPLETED);
         task.setCompletedAt(Instant.now());
         careTaskRepository.save(task);
+        overdueScheduler.removeAfterCommit(task.getPublicId());
 
         publishMedicationAdministeredIfApplicable(task, nurseId);
 
@@ -155,7 +164,7 @@ public class CareTaskService {
     }
 
     private void publishMedicationAdministeredIfApplicable(CareTask task, UUID administeredBy) {
-        medicationDetailsRepository.findByCareTaskId(task.getId()).ifPresent(details -> {
+        medicationRule.medicationDetails(task).ifPresent(details -> {
             try {
                 Map<String, Object> payload = new HashMap<>();
                 payload.put("patientId", task.getPatientId().toString());
@@ -164,6 +173,8 @@ public class CareTaskService {
                 payload.put("prescribedBy", task.getCreatedBy().toString()); // the doctor who ordered it
                 payload.put("drugName", details.getDrugName());
                 payload.put("administeredBy", administeredBy.toString());
+                payload.put("wardId", task.getWardId() != null ? task.getWardId().toString() : null);
+                payload.put("occurredAt", task.getCompletedAt().toString());
 
                 OutboxEvent event = new OutboxEvent();
                 event.setIdempotencyKey("medication-administered-" + task.getId());
@@ -196,6 +207,7 @@ public class CareTaskService {
         task.setCancelledBy(callerId);
         task.setCancellationReason(request.reason());
         careTaskRepository.save(task);
+        overdueScheduler.removeAfterCommit(task.getPublicId());
         return toResponse(task);
     }
 
@@ -222,6 +234,7 @@ public class CareTaskService {
         task.setRefusalReason(request.reason());
         task.setRefusedAt(Instant.now());
         careTaskRepository.save(task);
+        overdueScheduler.removeAfterCommit(task.getPublicId());
 
         // TODO: route through the Alert mechanism (§7.3-style guaranteed-acknowledgement pattern)
         // to notify the ordering doctor — parked, same as PATIENT_EMERGENCY_DECLARED notification hooks
@@ -246,7 +259,8 @@ public class CareTaskService {
                 task.getAssignedNurseId(), task.getWindowStart(), task.getDeadline(),
                 task.getStatus(), task.getCreatedBy(), task.getUndoWindowExpiresAt(),
                 task.getCarePlanPublicId(), task.getWardId(), task.getCreatedAt(), task.getCompletedAt(),
-                CareTaskQueryService.isOverdueDerived(task, Instant.now()), task.getType().getId()
+                CareTaskQueryService.isOverdueDerived(task, Instant.now()), task.getType().getId(),
+                PriorityLevel.fromInt(task.getPriority()), task.getOverdueAt()
         );
     }
 }

@@ -4,7 +4,9 @@ import com.dayo.careround.caretaskservice.data.models.CareTask;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +19,13 @@ import java.util.UUID;
 
 public interface CareTaskRepository extends JpaRepository<CareTask, UUID>, JpaSpecificationExecutor<CareTask> {
     Optional<CareTask> findByPublicId(UUID publicId);
+
+    // Row lock for the overdue timer: concurrent firings of the same task serialise and the second sees OVERDUE.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from CareTask t where t.publicId = :publicId")
+    Optional<CareTask> findForUpdateByPublicId(@Param("publicId") UUID publicId);
+
+    List<CareTask> findByStatusIn(Collection<CareTaskStatus> statuses);
     List<CareTask> findByPatientId(UUID patientId);
     List<CareTask> findByAssignedNurseIdAndStatus(UUID assignedNurseId, CareTaskStatus status);
     List<CareTask> findByPatientIdAndStatusIn(UUID patientId, List<CareTaskStatus> statuses);

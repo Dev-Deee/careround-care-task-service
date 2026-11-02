@@ -21,7 +21,7 @@ public class CareTaskQueryGrpcService extends CareTaskQueryServiceGrpc.CareTaskQ
         UUID patientId = UUID.fromString(request.getPatientId());
 
         List<String> pendingTaskIds = careTaskRepository
-                .findByPatientIdAndStatusIn(patientId, List.of(CareTaskStatus.PENDING, CareTaskStatus.IN_PROGRESS))
+                .findByPatientIdAndStatusIn(patientId, List.of(CareTaskStatus.PENDING, CareTaskStatus.IN_PROGRESS, CareTaskStatus.OVERDUE)) // still owed
                 .stream()
                 .map(CareTask::getPublicId)
                 .map(UUID::toString)

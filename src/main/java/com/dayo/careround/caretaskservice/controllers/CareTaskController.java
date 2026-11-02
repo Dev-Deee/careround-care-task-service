@@ -1,5 +1,6 @@
 package com.dayo.careround.caretaskservice.controllers;
 
+import com.dayo.careround.caretaskservice.data.models.enums.PriorityLevel;
 import com.dayo.careround.caretaskservice.dto.request.CancelCareTaskRequest;
 import com.dayo.careround.caretaskservice.dto.request.CreateCareTaskRequest;
 import com.dayo.careround.caretaskservice.dto.request.RefuseCareTaskRequest;
@@ -60,7 +61,8 @@ public class CareTaskController {
             @RequestParam(defaultValue = "false") boolean mine,
             @RequestParam(defaultValue = "false") boolean unassigned,
             @RequestParam(required = false) CareTaskStatus status,
-            @RequestParam(required = false) Integer priority,
+            @RequestParam(required = false) Integer priority, // deprecated: use priorityLevel
+            @RequestParam(required = false) PriorityLevel priorityLevel,
             @RequestParam(defaultValue = "false") boolean overdueDerived,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
@@ -69,7 +71,8 @@ public class CareTaskController {
             throw new BadRequestException("mine=true cannot be combined with another assignedNurseId");
         }
         UUID nurse = mine ? principal.userId() : assignedNurseId;
-        var filter = new CareTaskQueryService.Filter(wardId, patientId, nurse, unassigned, status, priority, overdueDerived);
+        var filter = new CareTaskQueryService.Filter(wardId, patientId, nurse, unassigned, status, priority, overdueDerived,
+                priorityLevel);
         return ResponseEntity.ok(careTaskQueryService.list(filter, page, size, careTaskService::toResponse));
     }
 
