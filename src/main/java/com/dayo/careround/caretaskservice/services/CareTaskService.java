@@ -8,7 +8,6 @@ import com.dayo.careround.caretaskservice.data.models.enums.CareTaskOrigin;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskStatus;
 import com.dayo.careround.caretaskservice.data.models.enums.OutboxStatus;
 import com.dayo.careround.caretaskservice.data.repositories.CareTaskRepository;
-import com.dayo.careround.caretaskservice.data.repositories.MedicationDetailsRepository;
 import com.dayo.careround.caretaskservice.data.repositories.OutboxEventRepository;
 import com.dayo.careround.caretaskservice.data.repositories.TaskTypeDefinitionRepository;
 import com.dayo.careround.caretaskservice.dto.request.CancelCareTaskRequest;
@@ -42,10 +41,10 @@ public class CareTaskService {
     private final CareTaskRepository careTaskRepository;
     private final TaskTypeDefinitionRepository taskTypeDefinitionRepository;
     private final OutboxEventRepository outboxEventRepository;
-    private final MedicationDetailsRepository medicationDetailsRepository;
     private final CarePlanRepository carePlanRepository;
     private final PatientLookupClient patientLookupClient;
     private final ObjectMapper objectMapper;
+    private final MedicationRule medicationRule;
 
     @Transactional
     public CareTaskResponse create(UUID createdBy, String creatorRole, CreateCareTaskRequest request) {
@@ -156,7 +155,7 @@ public class CareTaskService {
     }
 
     private void publishMedicationAdministeredIfApplicable(CareTask task, UUID administeredBy) {
-        medicationDetailsRepository.findByCareTaskId(task.getId()).ifPresent(details -> {
+        medicationRule.medicationDetails(task).ifPresent(details -> {
             try {
                 Map<String, Object> payload = new HashMap<>();
                 payload.put("patientId", task.getPatientId().toString());
@@ -165,6 +164,8 @@ public class CareTaskService {
                 payload.put("prescribedBy", task.getCreatedBy().toString()); // the doctor who ordered it
                 payload.put("drugName", details.getDrugName());
                 payload.put("administeredBy", administeredBy.toString());
+                payload.put("wardId", task.getWardId() != null ? task.getWardId().toString() : null);
+                payload.put("occurredAt", task.getCompletedAt().toString());
 
                 OutboxEvent event = new OutboxEvent();
                 event.setIdempotencyKey("medication-administered-" + task.getId());
