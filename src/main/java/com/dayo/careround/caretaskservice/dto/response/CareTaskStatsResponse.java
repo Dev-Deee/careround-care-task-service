@@ -13,9 +13,10 @@ public record CareTaskStatsResponse(
         Instant to,
         long total,
         Map<String, Long> byStatus,
-        Map<Integer, Long> byPriority,
+        Map<Integer, Long> byPriority, // deprecated: use byPriorityLevel
         Double completionRate, // COMPLETED / total; null when total is 0
         long overdueDerived,
         Long oldestOverdueAgeSeconds, // null when nothing is overdue
-        Instant generatedAt
+        Instant generatedAt,
+        Map<String, Long> byPriorityLevel
 ) {}

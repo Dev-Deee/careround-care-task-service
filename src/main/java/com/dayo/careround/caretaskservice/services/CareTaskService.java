@@ -1,5 +1,6 @@
 package com.dayo.careround.caretaskservice.services;
 
+import com.dayo.careround.caretaskservice.data.models.enums.PriorityLevel;
 import com.dayo.careround.caretaskservice.data.models.CareTask;
 import com.dayo.careround.caretaskservice.data.models.OutboxEvent;
 import com.dayo.careround.caretaskservice.data.models.TaskTypeDefinition;
@@ -71,7 +72,7 @@ public class CareTaskService {
         task.setPatientId(request.patientId());
         task.setWardId(patientLookupClient.wardOf(request.patientId()));
         task.setType(taskType);
-        task.setPriority(request.priority());
+        task.setPriority(PriorityLevel.resolve(request.priority(), request.priorityLevel(), "priority"));
         task.setOrigin(request.origin());
         task.setCarePlanId(request.carePlanId());
         if (request.carePlanId() != null) {
@@ -246,7 +247,8 @@ public class CareTaskService {
                 task.getAssignedNurseId(), task.getWindowStart(), task.getDeadline(),
                 task.getStatus(), task.getCreatedBy(), task.getUndoWindowExpiresAt(),
                 task.getCarePlanPublicId(), task.getWardId(), task.getCreatedAt(), task.getCompletedAt(),
-                CareTaskQueryService.isOverdueDerived(task, Instant.now()), task.getType().getId()
+                CareTaskQueryService.isOverdueDerived(task, Instant.now()), task.getType().getId(),
+                PriorityLevel.fromInt(task.getPriority())
         );
     }
 }

@@ -1,5 +1,6 @@
 package com.dayo.careround.caretaskservice.services;
 
+import com.dayo.careround.caretaskservice.data.models.enums.PriorityLevel;
 import com.dayo.careround.caretaskservice.data.models.TaskTypeDefinition;
 import com.dayo.careround.caretaskservice.data.repositories.TaskTypeDefinitionRepository;
 import com.dayo.careround.caretaskservice.dto.request.CreateTaskTypeDefinitionRequest;
@@ -20,7 +21,7 @@ public class TaskTypeDefinitionService {
     public TaskTypeDefinitionResponse create(CreateTaskTypeDefinitionRequest request) {
         TaskTypeDefinition taskType = new TaskTypeDefinition();
         taskType.setName(request.name());
-        taskType.setDefaultPriority(request.defaultPriority());
+        taskType.setDefaultPriority(PriorityLevel.resolve(request.defaultPriority(), request.defaultPriorityLevel(), "defaultPriority"));
         taskType.setRequiresDoctorOrder(request.requiresDoctorOrder());
         taskTypeDefinitionRepository.save(taskType);
         return toResponse(taskType);
@@ -35,7 +36,8 @@ public class TaskTypeDefinitionService {
     private TaskTypeDefinitionResponse toResponse(TaskTypeDefinition taskType) {
         return new TaskTypeDefinitionResponse(
                 taskType.getId(), taskType.getName(),
-                taskType.getDefaultPriority(), taskType.isRequiresDoctorOrder()
+                taskType.getDefaultPriority(), taskType.isRequiresDoctorOrder(),
+                PriorityLevel.fromInt(taskType.getDefaultPriority())
         );
     }
 }

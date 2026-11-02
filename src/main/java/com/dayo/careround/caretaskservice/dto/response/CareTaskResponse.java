@@ -1,5 +1,6 @@
 package com.dayo.careround.caretaskservice.dto.response;
 
+import com.dayo.careround.caretaskservice.data.models.enums.PriorityLevel;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskOrigin;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskStatus;
 
@@ -10,7 +11,7 @@ public record CareTaskResponse(
         UUID publicId,
         UUID patientId,
         String taskTypeName,
-        int priority,
+        int priority, // deprecated: use priorityLevel
         CareTaskOrigin origin,
         UUID carePlanId,
         UUID assignedNurseId,
@@ -24,5 +25,6 @@ public record CareTaskResponse(
         Instant createdAt,
         Instant completedAt,
         boolean overdueDerived,
-        UUID taskTypeId
+        UUID taskTypeId,
+        PriorityLevel priorityLevel
 ) {}

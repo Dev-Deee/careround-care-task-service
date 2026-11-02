@@ -1,5 +1,6 @@
 package com.dayo.careround.caretaskservice.services;
 
+import com.dayo.careround.caretaskservice.data.models.enums.PriorityLevel;
 import com.dayo.careround.caretaskservice.data.models.CareTask;
 import com.dayo.careround.caretaskservice.data.models.enums.CareTaskStatus;
 import com.dayo.careround.caretaskservice.data.models.MedicationDetails;
@@ -45,13 +46,17 @@ public class CareTaskQueryService {
     private final MedicationDetailsRepository medicationDetailsRepository;
 
     public record Filter(UUID wardId, UUID patientId, UUID assignedNurseId, boolean unassigned,
-                         CareTaskStatus status, Integer priority, boolean overdueDerived) {}
+                         CareTaskStatus status, Integer priority, boolean overdueDerived,
+                         PriorityLevel priorityLevel) {}
 
     @Transactional(readOnly = true)
     // Mapped inside the transaction: the task type is lazy.
     public <T> PageResponse<T> list(Filter f, Integer page, Integer size, Function<CareTask, T> mapper) {
         if (f.wardId() == null && f.patientId() == null && f.assignedNurseId() == null) {
             throw new BadRequestException("Give at least one of wardId, patientId, assignedNurseId or mine=true");
+        }
+        if (f.priority() != null && f.priorityLevel() != null && PriorityLevel.fromInt(f.priority()) != f.priorityLevel()) {
+            throw new BadRequestException("priority and priorityLevel disagree");
         }
         if (f.unassigned() && f.assignedNurseId() != null) {
             throw new BadRequestException("unassigned=true cannot be combined with assignedNurseId or mine=true");
@@ -64,6 +69,11 @@ public class CareTaskQueryService {
             if (f.assignedNurseId() != null) p.add(cb.equal(root.get("assignedNurseId"), f.assignedNurseId()));
             if (f.unassigned()) p.add(cb.isNull(root.get("assignedNurseId")));
             if (f.priority() != null) p.add(cb.equal(root.get("priority"), f.priority()));
+            if (f.priorityLevel() != null) p.add(switch (f.priorityLevel()) { // the level is derived from the int
+                case LOW -> cb.lessThanOrEqualTo(root.<Integer>get("priority"), 1);
+                case MEDIUM -> cb.equal(root.get("priority"), 2);
+                case HIGH -> cb.greaterThanOrEqualTo(root.<Integer>get("priority"), 3);
+            });
             if (f.status() != null) p.add(cb.equal(root.get("status"), f.status()));
             else p.add(cb.notEqual(root.get("status"), CareTaskStatus.RETRACTED)); // undone tasks only on request
             if (f.overdueDerived()) {
@@ -111,12 +121,16 @@ public class CareTaskQueryService {
         for (Object[] row : careTaskRepository.countByStatus(wardId, start, end)) byStatus.put(((CareTaskStatus) row[0]).name(), (Long) row[1]);
         Map<Integer, Long> byPriority = new TreeMap<>();
         for (Object[] row : careTaskRepository.countByPriority(wardId, start, end)) byPriority.put((Integer) row[0], (Long) row[1]);
+        Map<String, Long> byPriorityLevel = new LinkedHashMap<>();
+        for (PriorityLevel l : PriorityLevel.values()) byPriorityLevel.put(l.name(), 0L);
+        byPriority.forEach((prio, n) -> byPriorityLevel.merge(PriorityLevel.fromInt(prio).name(), n, Long::sum));
         long total = byStatus.values().stream().mapToLong(Long::longValue).sum();
         Double completionRate = total == 0 ? null : byStatus.get(CareTaskStatus.COMPLETED.name()) / (double) total;
         long overdue = careTaskRepository.countByWardIdAndStatusInAndDeadlineBefore(wardId, OPEN, now);
         Long oldest = careTaskRepository.findFirstByWardIdAndStatusInAndDeadlineBeforeOrderByDeadlineAsc(wardId, OPEN, now)
                 .map(t -> Duration.between(t.getDeadline(), now).toSeconds()).orElse(null);
-        return new CareTaskStatsResponse(wardId, start, end, total, byStatus, byPriority, completionRate, overdue, oldest, now);
+        return new CareTaskStatsResponse(wardId, start, end, total, byStatus, byPriority, completionRate, overdue, oldest, now,
+                byPriorityLevel);
     }
 
     public static boolean isOverdueDerived(CareTask task, Instant now) {
