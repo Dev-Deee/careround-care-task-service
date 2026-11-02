@@ -40,6 +40,7 @@ public class CareTaskQueryService {
     public static final int DEFAULT_SIZE = 20;
     public static final int MAX_SIZE = 100;
     public static final List<CareTaskStatus> OPEN = List.of(CareTaskStatus.PENDING, CareTaskStatus.IN_PROGRESS);
+    public static final List<CareTaskStatus> OPEN_OR_OVERDUE = List.of(CareTaskStatus.PENDING, CareTaskStatus.IN_PROGRESS, CareTaskStatus.OVERDUE);
     private static final Sort ORDER = Sort.by("deadline", "createdAt", "id");
 
     private final CareTaskRepository careTaskRepository;
@@ -76,9 +77,9 @@ public class CareTaskQueryService {
             });
             if (f.status() != null) p.add(cb.equal(root.get("status"), f.status()));
             else p.add(cb.notEqual(root.get("status"), CareTaskStatus.RETRACTED)); // undone tasks only on request
-            if (f.overdueDerived()) {
-                p.add(root.get("status").in(OPEN));
-                p.add(cb.lessThan(root.get("deadline"), now));
+            if (f.overdueDerived()) { // OVERDUE, plus open tasks whose timer has not fired yet
+                p.add(cb.or(cb.equal(root.get("status"), CareTaskStatus.OVERDUE),
+                        cb.and(root.get("status").in(OPEN), cb.lessThan(root.get("deadline"), now))));
             }
             return cb.and(p.toArray(Predicate[]::new));
         };
@@ -126,14 +127,15 @@ public class CareTaskQueryService {
         byPriority.forEach((prio, n) -> byPriorityLevel.merge(PriorityLevel.fromInt(prio).name(), n, Long::sum));
         long total = byStatus.values().stream().mapToLong(Long::longValue).sum();
         Double completionRate = total == 0 ? null : byStatus.get(CareTaskStatus.COMPLETED.name()) / (double) total;
-        long overdue = careTaskRepository.countByWardIdAndStatusInAndDeadlineBefore(wardId, OPEN, now);
-        Long oldest = careTaskRepository.findFirstByWardIdAndStatusInAndDeadlineBeforeOrderByDeadlineAsc(wardId, OPEN, now)
+        long overdue = careTaskRepository.countByWardIdAndStatusInAndDeadlineBefore(wardId, OPEN_OR_OVERDUE, now);
+        Long oldest = careTaskRepository.findFirstByWardIdAndStatusInAndDeadlineBeforeOrderByDeadlineAsc(wardId, OPEN_OR_OVERDUE, now)
                 .map(t -> Duration.between(t.getDeadline(), now).toSeconds()).orElse(null);
         return new CareTaskStatsResponse(wardId, start, end, total, byStatus, byPriority, completionRate, overdue, oldest, now,
                 byPriorityLevel);
     }
 
     public static boolean isOverdueDerived(CareTask task, Instant now) {
-        return OPEN.contains(task.getStatus()) && task.getDeadline().isBefore(now);
+        return task.getStatus() == CareTaskStatus.OVERDUE
+                || (OPEN.contains(task.getStatus()) && task.getDeadline().isBefore(now));
     }
 }

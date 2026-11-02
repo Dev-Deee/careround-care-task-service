@@ -26,5 +26,6 @@ public record CareTaskResponse(
         Instant completedAt,
         boolean overdueDerived,
         UUID taskTypeId,
-        PriorityLevel priorityLevel
+        PriorityLevel priorityLevel,
+        Instant overdueAt // when the overdue timer fired; null unless it has
 ) {}

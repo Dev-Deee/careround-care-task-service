@@ -15,6 +15,7 @@ import com.dayo.careround.caretaskservice.exception.CareProtocolNotFoundExceptio
 import jakarta.transaction.Transactional;
 import com.dayo.careround.caretaskservice.exception.InvalidTaskOriginException;
 import com.dayo.careround.caretaskservice.grpc.PatientLookupClient;
+import com.dayo.careround.caretaskservice.overdue.OverdueScheduler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class CarePlanService {
+
+    private final OverdueScheduler overdueScheduler;
 
     private final CarePlanRepository carePlanRepository;
     private final CareProtocolRepository careProtocolRepository;
@@ -93,6 +96,7 @@ public class CarePlanService {
         task.setUndoWindowExpiresAt(Instant.now().plusSeconds(10));
 
         careTaskRepository.save(task);
+        overdueScheduler.scheduleAfterCommit(task.getPublicId(), task.getDeadline());
     }
 
     /**
