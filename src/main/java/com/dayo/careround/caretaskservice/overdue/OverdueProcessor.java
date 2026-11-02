@@ -10,6 +10,7 @@ import com.dayo.careround.caretaskservice.data.repositories.OutboxEventRepositor
 import com.dayo.careround.caretaskservice.services.MedicationRule;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import java.util.UUID;
 
 // Fires one task's timer: in one transaction, lock the row, and if it is still PENDING or IN_PROGRESS set OVERDUE
 // and write the outbox event. Anything else is a no-op, so stale queue entries and double firing are harmless.
+@Slf4j
 @Component
 public class OverdueProcessor {
 
@@ -54,9 +56,11 @@ public class OverdueProcessor {
         Instant now = clock.instant();
         if (task.getDeadline().isAfter(now)) return Result.NOT_OPEN; // deadline moved later; it is queued again
 
+        CareTaskStatus wasStatus = task.getStatus();
         task.setStatus(CareTaskStatus.OVERDUE);
         task.setOverdueAt(now);
         careTaskRepository.save(task);
+        log.info("Task {} OVERDUE (deadline {}, was {})", task.getPublicId(), task.getDeadline(), wasStatus);
 
         if (Duration.between(task.getDeadline(), now).compareTo(backfillMaxAge) > 0) {
             return Result.OVERDUE_SILENT_BACKFILL; // old data on first run: no alert flood
